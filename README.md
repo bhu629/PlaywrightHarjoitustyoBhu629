@@ -8,7 +8,6 @@ Projektin aiemmat Playwright-testit korvasivat backendin vastaukset mockeilla
 
 Harjoitustyön tavoitteena oli tehdä järjestelmätesti (E2E), joka testaa varauksen
 muokkaamisen koko järjestelmän läpi: oikea selain, frontend, backend ja tietokanta.
-Lisäksi tavoitteena oli saada testit ajautumaan automaattisesti GitHub Actionsissa.
 
 ## Teknologiat
 
@@ -16,7 +15,6 @@ Lisäksi tavoitteena oli saada testit ajautumaan automaattisesti GitHub Actionsi
 - **React + Vite:** frontend
 - **Spring Boot:** backend ja REST-rajapinta
 - **H2-tietokanta:** muistitietokanta, joka nollautuu joka käynnistyksellä
-- **GitHub Actions:** testien automaattinen ajo
 
 ## Toteutus
 
@@ -56,18 +54,6 @@ muutoksen jälkeen varauksen uudelleen backendistä
 tallentunut, esim. `partySize` on 4. Näin testi huomaa myös tilanteen, jossa
 käyttöliittymä näyttää onnistumisen mutta tieto ei tallennu.
 
-### Automaattinen ajo GitHub Actionsissa
-
-Aiemmin CI ajoi Playwright-testit ilman backendiä, mikä toimi vain mockien
-ansiosta. Muutin workflowta niin, että se:
-
-1. asentaa Javan ja luo satunnaisen `JWT_SECRET`in
-2. käynnistää backendin taustalle ja odottaa, kunnes se vastaa
-3. asettaa `VITE_BACKEND_URL` osoittamaan backendiin
-4. ajaa kaikki Playwright-testit ja näyttää backendin lokin, jos testit epäonnistuvat
-
-Vanhat mock-testit toimivat edelleen samassa ajossa, koska ne korvaavat
-backend-kutsut itse.
 
 ### Ajaminen paikallisesti
 
@@ -86,7 +72,6 @@ backend-kutsut itse.
 - mock-testin ja järjestelmätestin ero: mitä kumpikin löytää ja mitä ei
 - miksi testidata pitää luoda ja siivota jokaista testiä varten
 - miksi tulos kannattaa tarkistaa backendistä eikä vain ruudulta
-- mitä opit CI:stä, kun backend piti saada käyntiin GitHub Actionsissa
 
 ## Mitä tekisin toisin
 
@@ -96,7 +81,6 @@ backend-kutsut itse.
 - Paikallisesti testit ajetaan kolmella selaimella rinnakkain. `serial` koskee vain
   yhtä selainta kerrallaan, joten eri selainten testit voivat varata samoja aikoja
   yhtä aikaa. Siksi paikallisesti kannattaa käyttää `--project=chromium`.
-  (CI:ssä `workers: 1`, joten ongelmaa ei siellä ole.)
 
 ## Jatkokehitysideat
 
