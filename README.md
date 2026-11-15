@@ -59,7 +59,9 @@ käyttöliittymä näyttää onnistumisen mutta tieto ei tallennu.
 
     # terminaali 1
     cd backend
-    $env:JWT_SECRET = "vahintaan-32-merkkia-pitka-testisalaisuus"
+    $bytes = New-Object byte[] 32
+    [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    $env:JWT_SECRET = [Convert]::ToBase64String($bytes)
     .\mvnw spring-boot:run
 
     # terminaali 2
