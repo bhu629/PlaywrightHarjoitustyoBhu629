@@ -1,82 +1,104 @@
-# Järjestelmätesti Playwrightilla – Pants-pöytävarausjärjestelmä
+# Järjestelmätestaus Playwrightilla – varauksen muokkaus
 
 ## Tavoite
 
-Pants on ravintolan pöytävarausjärjestelmä. Projektin aiemmat Playwright-testit
-korvasivat backendin vastaukset itse keksityillä vastauksilla (mockeilla), joten
-ne testasivat vain käyttöliittymää.
+Pants on ravintolan pöytävarausjärjestelmä (React-frontend, Spring Boot -backend).
+Projektin aiemmat Playwright-testit korvasivat backendin vastaukset mockeilla
+(`page.route`), joten ne testasivat vain käyttöliittymää.
 
-Harjoitustyön tavoitteena oli tehdä järjestelmätesti, joka testaa sovellusta
-kokonaisuutena ilman mockeja: oikea selain, oikea frontend, oikea backend ja
-tietokanta. Testattavaksi toiminnoksi valitsin kirjautumisen, koska ilman sitä
-ravintolan omistaja ei pääse hallintanäkymään.
+Harjoitustyön tavoitteena oli tehdä järjestelmätesti (E2E), joka testaa varauksen
+muokkaamisen koko järjestelmän läpi: oikea selain, frontend, backend ja tietokanta.
+Lisäksi tavoitteena oli saada testit ajautumaan automaattisesti GitHub Actionsissa.
 
 ## Teknologiat
 
-- **Playwright (TypeScript):** ohjaa selainta ja tarkistaa tulokset
-- **React + Vite:** sovelluksen frontend
-- **Spring Boot:** sovelluksen backend, joka tarkistaa tunnukset
-- **H2-tietokanta:** testitietokanta, jossa on valmiina testikäyttäjä
+- **Playwright (TypeScript):** selaimen ohjaus ja API-kutsut testissä
+- **React + Vite:** frontend
+- **Spring Boot:** backend ja REST-rajapinta
+- **H2-tietokanta:** muistitietokanta, joka nollautuu joka käynnistyksellä
+- **GitHub Actions:** testien automaattinen ajo
 
 ## Toteutus
 
-Testi on tiedostossa `frontend/tests/system-login.spec.ts`:
+Testit ovat tiedostossa `frontend/tests/reservation-modify-e2e.spec.ts`.
 
-    test('admin can login with the correct backend', async ({ page }) => {
-      await page.goto('/login');
+### Testien valmistelu
 
-      await page.getByLabel('Email').fill('admin@test.com');
-      await page.getByLabel('Password').fill('admin123');
-      await page.getByRole('button', { name: 'Sign in' }).click();
+- **Testit ajetaan peräkkäin** (`mode: 'serial'`), koska ne käyttävät samaa
+  tietokantaa ja samoja varausaikoja.
+- **Päivämäärä lasketaan aina tulevaisuuteen:** seuraavan kuun 10. päivä, tai 11.
+  päivä, jos 10. päivä on sunnuntai, jolloin ravintola on kiinni. Kiinteä päivämäärä
+  lakkaisi toimimasta, kun se menee ohi.
+- **Ennen jokaista testiä** (`beforeEach`) luodaan uusi varaus suoraan backendin
+  rajapinnan kautta (`POST /api/reservations`). Backend palauttaa `editToken`in,
+  jolla varausta voi muokata. Varauksen luominen API:n kautta on nopeampaa kuin
+  käyttöliittymän kautta, ja jokainen testi alkaa puhtaasta tilanteesta.
+- **Jokaisen testin jälkeen** (`afterEach`) varaus perutaan, jotta testidataa ei
+  jää tietokantaan varaamaan aikoja.
 
-      await expect(page).toHaveURL(/\/owner\/dashboard$/);
-      await expect(page.getByRole('heading', { name: 'Reservations' })).toBeVisible();
-    });
+### Testit
 
-### Mitä testissä tapahtuu
+| Testi | Mitä se tarkistaa |
+|---|---|
+| Varauksen luonti käyttöliittymässä | Asiakas valitsee päivän ja ajan, täyttää tiedot ja vahvistaa. Sen jälkeen hän pääsee muokkaussivulle, jossa hänen nimensä näkyy. |
+| Muokkaussivu näyttää tiedot | Varauksen nimi, sähköposti ja henkilömäärä tulevat oikein backendistä. |
+| Henkilömäärän muutos | Määrä muutetaan 2 → 4. |
+| Ajan muutos | Aika muutetaan 12:00 → 14:00. |
+| Nimen ja lisätietojen muutos | Etunimi ja lisätiedot ("Birthday dinner") tallentuvat. |
+| Muutokset säilyvät | Kun muokkaussivu avataan uudelleen, muutettu nimi näkyy edelleen. |
 
-1. Selain avaa kirjautumissivun.
-2. Testi täyttää sähköpostin ja salasanan ja painaa *Sign in* -painiketta.
-3. Frontend lähettää tunnukset backendille. Backend tarkistaa ne tietokannasta ja
-   palauttaa kirjautumistokenin.
-4. Testi tarkistaa, että käyttäjä päätyy dashboardille ja näkee otsikon
-   *Reservations*.
+### Tulos tarkistetaan tietokannasta, ei vain ruudulta
 
-### Ero aiempiin testeihin
+Muokkaustesteissä ei riitä, että ruudulle tulee "Reservation Confirmed!". Testi hakee
+muutoksen jälkeen varauksen uudelleen backendistä
+(`GET /api/reservations/manage/{editToken}`) ja tarkistaa, että muutos on oikeasti
+tallentunut, esim. `partySize` on 4. Näin testi huomaa myös tilanteen, jossa
+käyttöliittymä näyttää onnistumisen mutta tieto ei tallennu.
 
-Aiemmassa testissä `login.spec.ts` Playwright vastaa kirjautumispyyntöön itse
-(`page.route`), eikä pyyntö koskaan mene backendille. Testi menisi siis läpi,
-vaikka backend olisi rikki. Uusi testi käyttää oikeaa backendiä, joten se
-huomaa myös virheet frontendin ja backendin välillä.
+### Automaattinen ajo GitHub Actionsissa
 
-### Ajaminen
+Aiemmin CI ajoi Playwright-testit ilman backendiä, mikä toimi vain mockien
+ansiosta. Muutin workflowta niin, että se:
 
-Backend käynnistetään ensin:
+1. asentaa Javan ja luo satunnaisen `JWT_SECRET`in
+2. käynnistää backendin taustalle ja odottaa, kunnes se vastaa
+3. asettaa `VITE_BACKEND_URL` osoittamaan backendiin
+4. ajaa kaikki Playwright-testit ja näyttää backendin lokin, jos testit epäonnistuvat
 
+Vanhat mock-testit toimivat edelleen samassa ajossa, koska ne korvaavat
+backend-kutsut itse.
+
+### Ajaminen paikallisesti
+
+    # terminaali 1
     cd backend
+    $env:JWT_SECRET = "vahintaan-32-merkkia-pitka-testisalaisuus"
     .\mvnw spring-boot:run
 
-Sen jälkeen testi ajetaan toisessa terminaalissa:
-
+    # terminaali 2
     cd frontend
-    npx playwright test tests/system-login.spec.ts --project=chromium
-
-Playwright käynnistää frontendin automaattisesti.
+    npx playwright test tests/reservation-modify-e2e.spec.ts --project=chromium
 
 ## Mitä opin
 
 ✍️ Kirjoita omin sanoin, esimerkiksi:
-- mikä ero on mock-testillä ja järjestelmätestillä ja milloin kumpaakin kannattaa käyttää
-- mitä kirjautumisessa tapahtuu frontendin ja backendin välillä
-- mikä oli testin tekemisessä vaikeaa tai yllättävää
+- mock-testin ja järjestelmätestin ero: mitä kumpikin löytää ja mitä ei
+- miksi testidata pitää luoda ja siivota jokaista testiä varten
+- miksi tulos kannattaa tarkistaa backendistä eikä vain ruudulta
+- mitä opit CI:stä, kun backend piti saada käyntiin GitHub Actionsissa
 
 ## Mitä tekisin toisin
 
-✍️ Esimerkiksi: backendin käynnistyksen voisi automatisoida, jotta playwright testi
-käynnistyisi yhdellä komennolla.
+✍️ Esimerkiksi:
+- Paikallisesti backend pitää käynnistää käsin. Playwrightin `webServer`-asetuksen
+  voisi laajentaa käynnistämään myös backendin.
+- Paikallisesti testit ajetaan kolmella selaimella rinnakkain. `serial` koskee vain
+  yhtä selainta kerrallaan, joten eri selainten testit voivat varata samoja aikoja
+  yhtä aikaa. Siksi paikallisesti kannattaa käyttää `--project=chromium`.
+  (CI:ssä `workers: 1`, joten ongelmaa ei siellä ole.)
 
 ## Jatkokehitysideat
 
-- Testi väärälle salasanalle (virheilmoitus näkyy, käyttäjä ei pääse sisään)
-- Testi varauksen tekemiselle alusta loppuun
-- Järjestelmätestin ajaminen automaattisesti GitHub Actionsissa
+- Testi sille, ettei varausta voi muuttaa täyteen aikaan
+- Testi sille, ettei peruttua varausta voi enää muokata
+- E2E-testi omistajan kirjautumiselle ja dashboardille
