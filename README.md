@@ -21,6 +21,7 @@ Lisäksi tavoitteena oli saada testit ajautumaan automaattisesti GitHub Actionsi
 ## Toteutus
 
 Testit ovat tiedostossa `frontend/tests/reservation-modify-e2e.spec.ts`.
+(https://github.com/TiimiPANTS/pants/blob/dev/frontend/tests/reservation-modify-e2e.spec.ts)
 
 ### Testien valmistelu
 
