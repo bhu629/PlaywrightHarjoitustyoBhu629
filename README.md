@@ -88,3 +88,52 @@ käyttöliittymä näyttää onnistumisen mutta tieto ei tallennu.
 - Testi sille, ettei varausta voi muuttaa täyteen aikaan
 - Testi sille, ettei peruttua varausta voi enää muokata
 - E2E-testi omistajan kirjautumiselle ja dashboardille
+
+## Mermaid kaaviot
+
+```mermaid
+flowchart LR
+    T[Playwright-testi] -->|ohjaa selainta| B[Chromium]
+    T -->|API-kutsut: luonti, tarkistus, peruutus| BE
+    B -->|avaa sivut| FE[React + Vite<br/>localhost:5173]
+    FE -->|REST API| BE[Spring Boot<br/>localhost:8080]
+    BE -->|JPA / SQL| DB[(H2-tietokanta)]
+```
+Kaavio näyttää, että testi käyttää järjestelmää kahta reittiä: selaimen kautta kuten käyttäjä ja suoraan API:n kautta testidatan luontiin ja tarkistukseen.
+
+### Yhden testin kulku ("customer can change the party size")
+
+```mermaid
+sequenceDiagram
+    participant T as Playwright-testi
+    participant S as Selain + frontend
+    participant B as Backend
+    participant D as H2-tietokanta
+
+    Note over T,D: beforeEach – testidatan luonti
+    T->>B: POST /api/reservations
+    B->>D: tallenna varaus
+    B-->>T: 201 + editToken
+
+    Note over T,D: Testi – muokkaus käyttöliittymässä
+    T->>S: avaa /reserve/{editToken}
+    S->>B: GET /api/reservations/manage/{editToken}
+    B->>D: hae varaus
+    B-->>S: varauksen tiedot
+    T->>S: paina "+" kaksi kertaa, "Update Reservation"
+    S->>B: PUT /api/reservations/manage/{editToken}
+    B->>D: päivitä partySize = 4
+    B-->>S: OK
+    S-->>T: "Reservation Confirmed!" näkyy
+
+    Note over T,D: Tarkistus backendistä
+    T->>B: GET /api/reservations/manage/{editToken}
+    B-->>T: partySize = 4 ✔
+
+    Note over T,D: afterEach – siivous
+    T->>B: PATCH /api/reservations/manage/{editToken}/cancel
+    B->>D: varaus perutuksi
+```
+Kaavio näyttää koko testin järjestyksessä: data luodaan, sitä muokataan käyttöliittymässä, tulos tarkistetaan backendistä ja lopuksi siivotaan.
+
+
