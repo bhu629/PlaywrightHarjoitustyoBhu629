@@ -18,8 +18,8 @@ muokkaamisen koko järjestelmän läpi: oikea selain, frontend, backend ja tieto
 
 ## Toteutus
 
-Testit ovat tiedostossa `frontend/tests/reservation-modify-e2e.spec.ts`.
-(https://github.com/TiimiPANTS/pants/blob/dev/frontend/tests/reservation-modify-e2e.spec.ts)
+Testit ovat tiedostossa
+[`frontend/tests/reservation-modify-e2e.spec.ts`](https://github.com/TiimiPANTS/pants/blob/dev/frontend/tests/reservation-modify-e2e.spec.ts).
 
 ### Testien valmistelu
 
@@ -55,7 +55,7 @@ tallentunut, esim. `partySize` on 4. Näin testi huomaa myös tilanteen, jossa
 käyttöliittymä näyttää onnistumisen mutta tieto ei tallennu.
 
 
-### Ajaminen paikallisesti
+### Testien ajaminen 
 
     # terminaali 1
     cd backend
@@ -75,7 +75,6 @@ käyttöliittymä näyttää onnistumisen mutta tieto ei tallennu.
 
 ## Mitä tekisin toisin
 
-✍️ Esimerkiksi:
 - Paikallisesti backend pitää käynnistää käsin. Playwrightin `webServer`-asetuksen
   voisi laajentaa käynnistämään myös backendin.
 - Paikallisesti testit ajetaan kolmella selaimella rinnakkain. `serial` koskee vain
