@@ -1,4 +1,4 @@
-# Järjestelmätestaus Playwrightilla – varauksen muokkaus
+# Järjestelmätestaus Playwrightilla – varauksen elinkaari
 
 ## Tavoite
 
@@ -6,8 +6,10 @@ Pants on ravintolan pöytävarausjärjestelmä (React-frontend, Spring Boot -bac
 Projektin aiemmat Playwright-testit korvasivat backendin vastaukset mockeilla
 (`page.route`), joten ne testasivat vain käyttöliittymää.
 
-Harjoitustyön tavoitteena oli tehdä järjestelmätesti (E2E), joka testaa varauksen
-muokkaamisen koko järjestelmän läpi: oikea selain, frontend, backend ja tietokanta.
+Harjoitustyön tavoitteena oli tehdä järjestelmätesti, joka testaa yhden varauksen
+koko elinkaaren koko järjestelmän läpi: oikea selain, frontend, backend ja
+tietokanta, ilman yhtään mockia. Testissä toimii kaksi käyttäjää, asiakas ja
+ravintolan omistaja.
 
 ## Teknologiat
 
@@ -18,122 +20,132 @@ muokkaamisen koko järjestelmän läpi: oikea selain, frontend, backend ja tieto
 
 ## Toteutus
 
-Testit ovat tiedostossa
-[`frontend/tests/reservation-modify-e2e.spec.ts`](https://github.com/TiimiPANTS/pants/blob/dev/frontend/tests/reservation-modify-e2e.spec.ts).
+Testi on tiedostossa
+[`frontend/tests/system-reservation-lifecycle.spec.ts`](https://github.com/TiimiPANTS/pants/blob/dev/frontend/tests/system-reservation-lifecycle.spec.ts).
+Se käyttää valmiita apufunktioita tiedostosta
+`frontend/tests/helpers/reservationHelpers.ts`.
 
-### Testien valmistelu
+### Testin kulku
 
-- **Testit ajetaan peräkkäin** (`mode: 'serial'`), koska ne käyttävät samaa
-  tietokantaa ja samoja varausaikoja.
-- **Päivämäärä lasketaan aina tulevaisuuteen:** seuraavan kuun 10. päivä, tai 11.
-  päivä, jos 10. päivä on sunnuntai, jolloin ravintola on kiinni. Kiinteä päivämäärä
-  lakkaisi toimimasta, kun se menee ohi.
-- **Ennen jokaista testiä** (`beforeEach`) luodaan uusi varaus suoraan backendin
-  rajapinnan kautta (`POST /api/reservations`). Backend palauttaa `editToken`in,
-  jolla varausta voi muokata. Varauksen luominen API:n kautta on nopeampaa kuin
-  käyttöliittymän kautta, ja jokainen testi alkaa puhtaasta tilanteesta.
-- **Jokaisen testin jälkeen** (`afterEach`) varaus perutaan, jotta testidataa ei
-  jää tietokantaan varaamaan aikoja.
+1. **Asiakas tekee varauksen** käyttöliittymässä: valitsee päivän ja ajan 15:00,
+   täyttää yhteystiedot ja vahvistaa. Sen jälkeen hän siirtyy muokkaussivulle,
+   ja testi ottaa osoitteesta talteen varauksen `editToken`in.
+2. **Omistaja kirjautuu** oikeilla tunnuksilla ja löytää varauksen dashboardilta.
+3. **Omistaja peruu varauksen.** Dashboardin rivillä lukee nyt "Cancelled",
+   eikä "Cancel"-painiketta enää ole.
+4. **Asiakas avaa muokkauslinkin uudelleen** ja näkee otsikon
+   "Reservation cancelled". Peruutuspainiketta ei enää näy.
 
-### Testit
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as Asiakas (selain 1)
+    actor O as Omistaja (selain 2)
+    participant FE as Frontend (React)
+    participant BE as Backend (Spring Boot)
+    participant DB as H2-tietokanta
 
-| Testi | Mitä se tarkistaa |
-|---|---|
-| Varauksen luonti käyttöliittymässä | Asiakas valitsee päivän ja ajan, täyttää tiedot ja vahvistaa. Sen jälkeen hän pääsee muokkaussivulle, jossa hänen nimensä näkyy. |
-| Muokkaussivu näyttää tiedot | Varauksen nimi, sähköposti ja henkilömäärä tulevat oikein backendistä. |
-| Henkilömäärän muutos | Määrä muutetaan 2 → 4. |
-| Ajan muutos | Aika muutetaan 12:00 → 14:00. |
-| Nimen ja lisätietojen muutos | Etunimi ja lisätiedot ("Birthday dinner") tallentuvat. |
-| Muutokset säilyvät | Kun muokkaussivu avataan uudelleen, muutettu nimi näkyy edelleen. |
+    Note over C,DB: 1. Asiakas tekee varauksen
+    C->>FE: Valitsee päivän, ajan 15:00 ja täyttää tiedot
+    FE->>BE: POST /api/reservations
+    BE->>DB: Tallenna varaus
+    BE-->>FE: 201 Created + editToken
+    FE-->>C: "Reservation Confirmed!"
 
-### Tulos tarkistetaan tietokannasta, ei vain ruudulta
+    Note over O,DB: 2. Omistaja löytää varauksen
+    O->>FE: Kirjautuu (owner@test.com)
+    FE->>BE: POST /api/auth/login
+    BE-->>FE: Sessio
+    FE->>BE: GET /api/reservations
+    BE->>DB: Hae varaukset
+    BE-->>FE: Varauslista
+    FE-->>O: Dashboard, rivillä asiakkaan sähköposti
 
-Muokkaustesteissä ei riitä, että ruudulle tulee "Reservation Confirmed!". Testi hakee
-muutoksen jälkeen varauksen uudelleen backendistä
-(`GET /api/reservations/manage/{editToken}`) ja tarkistaa, että muutos on oikeasti
-tallentunut, esim. `partySize` on 4. Näin testi huomaa myös tilanteen, jossa
-käyttöliittymä näyttää onnistumisen mutta tieto ei tallennu.
+    Note over O,DB: 3. Omistaja peruu varauksen
+    O->>FE: Cancel → Yes
+    FE->>BE: PATCH /api/reservations/{id}/cancel
+    BE->>DB: Tila = CANCELLED
+    BE-->>FE: 200 OK
+    FE-->>O: Rivillä "Cancelled"
+
+    Note over C,DB: 4. Asiakas näkee peruutuksen
+    C->>FE: Avaa /reserve/{editToken}
+    FE->>BE: GET /api/reservations/manage/{editToken}
+    BE->>DB: Hae varaus
+    BE-->>FE: status CANCELLED
+    FE-->>C: "Reservation cancelled"
+```
+
+### Keskeiset ratkaisut
+
+- **Kaksi selainta.** Asiakas ja omistaja käyttävät eri selainikkunaa
+  (`browser.newContext()`). Näin heillä on omat kirjautumiset. Tilanne on sama
+  kuin oikeassa elämässä, kun kaksi ihmistä käyttää sovellusta eri koneilla.
+
+- **Yksi testi, ei monta.** Testi tarkistaa, että sama varaus näkyy oikein sekä
+  asiakkaalle että omistajalle. Siksi kaikki vaiheet ovat samassa testissä. Jos
+  vaiheet olisivat eri testeissä, testit riippuisivat toisistaan ja ne pitäisi
+  ajaa aina tietyssä järjestyksessä.
+
+- **Uusi sähköposti joka kerta.** Asiakkaan sähköposti on joka testiajossa eri,
+  esimerkiksi `system-1731830400000@example.com`. Siksi omistaja löytää listalta
+  aina oikean varauksen, vaikka listalla olisi muitakin varauksia.
+
+- **Päivämäärä on aina tulevaisuudessa.** Testi varaa pöydän seuraavan kuun
+  10. päiväksi. Jos se päivä on sunnuntai, testi valitsee 11. päivän, koska
+  ravintola on sunnuntaina kiinni. Kiinteää päivämäärää ei käytetä, koska testi
+  lakkaisi toimimasta, kun päivä on mennyt.
+
+- **Oma kellonaika.** Testi varaa ajan klo 15:00. Projektin muut testit eivät
+  käytä tätä aikaa, joten testit eivät varaa samaa aikaa yhtä aikaa.
+
+- **Siivous.** Jos testi epäonnistuu kesken, `finally`-lohko peruu varauksen.
+  Näin tietokantaan ei jää vanhoja testivarauksia.
+
+- **Testikäyttäjä.** Omistajana testi käyttää valmista testikäyttäjää
+  `owner@test.com`. Backend luo tämän käyttäjän automaattisesti, kun se
+  käynnistyy (`TestLoginConfig.java`). Halutessaan tunnukset voi vaihtaa
+  ympäristömuuttujilla `OWNER_EMAIL` ja `OWNER_PASSWORD`.
 
 
-### Testien ajaminen 
+### Testin ajaminen
+
+Backend tarvitsee käynnistyäkseen `JWT_SECRET`-muuttujan, joka löytyy projektin
+juuren `.env`-tiedostosta. Playwright käynnistää frontendin automaattisesti,
+mutta backend pitää käynnistää itse.
 
     # terminaali 1
     cd backend
-    $bytes = New-Object byte[] 32
-    [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-    $env:JWT_SECRET = [Convert]::ToBase64String($bytes)
     .\mvnw spring-boot:run
 
     # terminaali 2
     cd frontend
-    npx playwright test tests/reservation-modify-e2e.spec.ts --project=chromium
+    npx playwright test tests/system-reservation-lifecycle.spec.ts --project=chromium
+
 
 ## Mitä opin
 
 ✍️ Kirjoita omin sanoin, esimerkiksi:
 - mock-testin ja järjestelmätestin ero: mitä kumpikin löytää ja mitä ei
-- miksi testidata pitää luoda ja siivota jokaista testiä varten
-- miksi tulos kannattaa tarkistaa backendistä eikä vain ruudulta
+- miten kaksi selainkontekstia mahdollistaa kahden käyttäjän testaamisen samassa testissä
+- miksi testidata kannattaa tehdä yksilölliseksi ja siivota testin jälkeen
 
 ## Mitä tekisin toisin
 
-- Paikallisesti backend pitää käynnistää käsin. Playwrightin `webServer`-asetuksen
-  voisi laajentaa käynnistämään myös backendin.
-- Paikallisesti testit ajetaan kolmella selaimella rinnakkain. `serial` koskee vain
-  yhtä selainta kerrallaan, joten eri selainten testit voivat varata samoja aikoja
-  yhtä aikaa. Siksi paikallisesti kannattaa käyttää `--project=chromium`.
+- Playwrightin `webServer`-asetus käynnistää nyt vain frontendin. Sen voisi
+  laajentaa käynnistämään myös backendin, jolloin testi lähtisi käyntiin yhdellä
+  komennolla.
+- Paikallisesti Playwright ajaa testit kolmella selaimella rinnakkain, jolloin
+  eri selainten ajot voivat varata saman ajan yhtä aikaa. Siksi paikallisesti
+  kannattaa käyttää `--project=chromium`.
+- Testin vaiheet voisi merkitä `test.step`-lohkoilla, jolloin raportista näkisi
+  suoraan, missä vaiheessa testi kaatui.
 
 ## Jatkokehitysideat
 
-- Testi sille, ettei varausta voi muuttaa täyteen aikaan
+- Järjestelmätesti, jossa omistaja muokkaa varausta ja asiakas näkee muutoksen
 - Testi sille, ettei peruttua varausta voi enää muokata
-- E2E-testi omistajan kirjautumiselle ja dashboardille
+- Testi sille, ettei varausta voi tehdä täyteen aikaan
 
-## Mermaid kaaviot
-
-```mermaid
-flowchart LR
-    T[Playwright-testi] -->|ohjaa selainta| B[Chromium]
-    T -->|API-kutsut: luonti, tarkistus, peruutus| BE
-    B -->|avaa sivut| FE[React + Vite<br/>localhost:5173]
-    FE -->|REST API| BE[Spring Boot<br/>localhost:8080]
-    BE -->|JPA / SQL| DB[(H2-tietokanta)]
-```
-Kaavio näyttää, että testi käyttää järjestelmää kahta reittiä: selaimen kautta kuten käyttäjä ja suoraan API:n kautta testidatan luontiin ja tarkistukseen.
-
-### Yhden testin kulku ("customer can change the party size")
-
-```mermaid
-sequenceDiagram
-    participant T as Playwright-testi
-    participant S as Selain + frontend
-    participant B as Backend
-    participant D as H2-tietokanta
-
-    Note over T,D: beforeEach – testidatan luonti
-    T->>B: POST /api/reservations
-    B->>D: tallenna varaus
-    B-->>T: 201 + editToken
-
-    Note over T,D: Testi – muokkaus käyttöliittymässä
-    T->>S: avaa /reserve/{editToken}
-    S->>B: GET /api/reservations/manage/{editToken}
-    B->>D: hae varaus
-    B-->>S: varauksen tiedot
-    T->>S: paina "+" kaksi kertaa, "Update Reservation"
-    S->>B: PUT /api/reservations/manage/{editToken}
-    B->>D: päivitä partySize = 4
-    B-->>S: OK
-    S-->>T: "Reservation Confirmed!" näkyy
-
-    Note over T,D: Tarkistus backendistä
-    T->>B: GET /api/reservations/manage/{editToken}
-    B-->>T: partySize = 4 ✔
-
-    Note over T,D: afterEach – siivous
-    T->>B: PATCH /api/reservations/manage/{editToken}/cancel
-    B->>D: varaus perutuksi
-```
-Kaavio näyttää koko testin järjestyksessä: data luodaan, sitä muokataan käyttöliittymässä, tulos tarkistetaan backendistä ja lopuksi siivotaan.
 
 
