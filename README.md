@@ -23,7 +23,7 @@ ravintolan omistaja.
 Testi on tiedostossa
 [`frontend/tests/system-reservation-lifecycle.spec.ts`](https://github.com/TiimiPANTS/pants/blob/dev/frontend/tests/system-reservation-lifecycle.spec.ts).
 Se käyttää valmiita apufunktioita tiedostosta
-`frontend/tests/helpers/reservationHelpers.ts`.
+[`frontend/tests/helpers/reservationHelpers.ts`](https://github.com/TiimiPANTS/pants/blob/dev/frontend/tests/helpers/reservationHelpers.ts).
 
 ### Testin kulku
 
