@@ -125,10 +125,25 @@ mutta backend pitää käynnistää itse.
 
 ## Mitä opin
 
-✍️ Kirjoita omin sanoin, esimerkiksi:
-- mock-testin ja järjestelmätestin ero: mitä kumpikin löytää ja mitä ei
-- miten kaksi selainkontekstia mahdollistaa kahden käyttäjän testaamisen samassa testissä
-- miksi testidata kannattaa tehdä yksilölliseksi ja siivota testin jälkeen
+**Järjestelmätesti**
+- Järjestelmätestissä kaikki osat ovat käytössä: selain, frontend, backend ja
+  tietokanta.
+- Se huomaa virheet, jotka tulevat osien välillä. Esimerkiksi kirjautuminen
+  tai tallennus ei toimi.
+- Järjestelmätesti on hitaampi.
+- Backendin pitää olla päällä, kun testi ajetaan.
+- Jos testi ei mene läpi, virhettä on vaikeampi löytää.
+
+  ### Oma testidata ja siivous
+
+**Oma sähköposti joka kerta**
+Tietokannassa voi olla monta varausta. Siksi testi käyttää joka kerta uutta
+sähköpostia. Näin testi löytää aina oman varauksensa.
+
+**Siivous**
+Testin lopussa varaus perutaan. Jos varaus jää tietokantaan, aika on varattu.
+Silloin seuraava testi voi epäonnistua. Siivouksen jälkeen jokainen testi
+alkaa samasta tilanteesta.
 
 ## Mitä tekisin toisin
 
@@ -143,9 +158,13 @@ mutta backend pitää käynnistää itse.
 
 ## Jatkokehitysideat
 
-- Järjestelmätesti, jossa omistaja muokkaa varausta ja asiakas näkee muutoksen
-- Testi sille, ettei peruttua varausta voi enää muokata
-- Testi sille, ettei varausta voi tehdä täyteen aikaan
-
+- **Backend käynnistyy itse.** Nyt backend pitää käynnistää käsin. Playwright
+  voisi käynnistää sen automaattisesti, kuten se käynnistää jo frontendin.
+  Silloin testin voi ajaa yhdellä komennolla.
+- **Sunnuntai on kiinni.** Testi tarkistaa, ettei asiakas voi valita
+  sunnuntaita, koska ravintola on silloin kiinni
+- **Lisätiedot näkyvät omistajalle.** Asiakas kirjoittaa varaukseen
+  lisätiedon, esimerkiksi "Syntymäpäivä". Testi tarkistaa, että omistaja näkee
+  sen dashboardilla.
 
 
